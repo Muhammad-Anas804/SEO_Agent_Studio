@@ -21,6 +21,7 @@ from seo_agents.database import store
 from seo_agents.export import build_export
 from seo_agents.images import service as image_service
 from seo_agents.security import Principal, get_principal, rate_limited, require_admin
+from seo_agents.graph.engine import create_engine
 from seo_agents.seo_brain import SEOAutomationEngine
 from seo_agents.State import SEOState
 
@@ -184,7 +185,7 @@ def _execute_run(state: SEOState) -> None:
     run_id = state.run_id
     try:
         store.update_run(run_id, "running", state.model_dump_json())
-        engine = SEOAutomationEngine(
+        engine = create_engine(
             is_pro=state.is_pro_tier,
             on_progress=lambda s: store.update_run(run_id, "running", s.model_dump_json()),
         )

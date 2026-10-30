@@ -1,60 +1,60 @@
 """
-One function per agent. Each takes the state and returns a PARTIAL state update.
+Graph nodes. Each node runs ONE existing agent method from SEOAutomationEngine
+and reproduces what execute_pipeline did around it: timing, audit log, error
+handling, AI usage collection and progress notification.
 
-STUBS: bodies are placeholders. Step 2 replaces each with the real logic
-ported from seo_brain.py, keeping the same inputs and outputs.
+The SEOState is mutated in place ON PURPOSE: api.py's progress callback and the
+caller hold a reference to the same object, exactly as with the legacy engine.
 """
-from __future__ import annotations
-
+import logging
 import time
 
-from .state import PipelineState
+from seo_agents import llm
+from seo_agents.State import AgentAuditLog
+from seo_agents.seo_brain import CRITICAL_AGENTS, SEOAutomationEngine
+
+from .state import GraphState
+
+logger = logging.getLogger("seo_agents.graph")
 
 
-def _trail(agent: str, started: float, status: str = "SUCCESS") -> list[dict]:
-    return [{"agent_name": agent, "status": status, "execution_time_ms": int((time.time() - started) * 1000)}]
+def make_agent_node(name: str, method: str, engine: SEOAutomationEngine):
+    def node(graph_state: GraphState) -> dict:
+        state = graph_state["seo"]
+        llm.start_usage_log()  # reset per node so usage is attributed to the right agent
+        started = time.perf_counter()
+        try:
+            status, details = getattr(engine, method)(state)
+        except Exception as exc:
+            elapsed = round((time.perf_counter() - started) * 1000, 2)
+            message = f"{name} failed: {exc}"
+            logger.error("run_id=%s %s", state.run_id, message)
+            state.errors.append(message)
+            state.audit_trail.append(
+                AgentAuditLog(agent_name=name, execution_time_ms=elapsed, status="FAILED", details=str(exc))
+            )
+            engine._collect_usage(state, name)
+            engine._notify(state)
+            return {"seo": state, "halted": name in CRITICAL_AGENTS}
+
+        elapsed = round((time.perf_counter() - started) * 1000, 2)
+        state.audit_trail.append(
+            AgentAuditLog(agent_name=name, execution_time_ms=elapsed, status=status, details=details)
+        )
+        engine._collect_usage(state, name)
+        engine._notify(state)
+        return {"seo": state, "halted": False}
+
+    return node
 
 
-def keyword_intent(state: PipelineState) -> dict:
-    t = time.time()
-    return {"search_intent": "informational", "audit_trail": _trail("KeywordIntentAgent", t)}  # TODO port
+def make_finalize_node(engine: SEOAutomationEngine):
+    def finalize(graph_state: GraphState) -> dict:
+        state = graph_state["seo"]
+        state.ready_for_cms_publish = bool(
+            state.generated_article_markdown and state.schema_markup and not state.errors
+        )
+        engine._notify(state)
+        return {"seo": state}
 
-
-def serp_research(state: PipelineState) -> dict:
-    t = time.time()
-    return {"serp": {}, "audit_trail": _trail("SerpAgent", t)}  # TODO port
-
-
-def outline(state: PipelineState) -> dict:
-    t = time.time()
-    return {"outline": ["Intro", "Body", "Conclusion"], "audit_trail": _trail("OutlineAgent", t)}  # TODO port
-
-
-def write_article(state: PipelineState) -> dict:
-    t = time.time()
-    return {"article_markdown": "# Draft", "revision_count": 0, "audit_trail": _trail("WriterAgent", t)}  # TODO port
-
-
-def seo_score(state: PipelineState) -> dict:
-    t = time.time()
-    score = 60 + 15 * state.get("revision_count", 0)  # stub: improves with each revision
-    return {"seo_score": score, "audit_trail": _trail("ScoreAgent", t)}  # TODO port real scoring
-
-
-def revise_article(state: PipelineState) -> dict:
-    t = time.time()
-    return {
-        "article_markdown": state.get("article_markdown", "") + "\n(revised)",
-        "revision_count": state.get("revision_count", 0) + 1,
-        "audit_trail": _trail("ReviseAgent", t),
-    }  # TODO port
-
-
-def internal_links(state: PipelineState) -> dict:
-    t = time.time()
-    return {"internal_links": [], "audit_trail": _trail("LinkAgent", t)}  # TODO port
-
-
-def meta_and_schema(state: PipelineState) -> dict:
-    t = time.time()
-    return {"meta_title": "", "meta_description": "", "audit_trail": _trail("MetaSchemaAgent", t)}  # TODO port
+    return finalize

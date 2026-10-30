@@ -1,42 +1,46 @@
-"""Wires the nodes into a graph. This file is the readable map of the pipeline."""
-from __future__ import annotations
-
+"""
+The readable map of the pipeline. To reorder or add an agent, edit PIPELINE.
+Names and order match SEOAutomationEngine.execute_pipeline.
+"""
 from langgraph.graph import END, START, StateGraph
 
-from . import nodes
-from .state import PipelineState
+from .nodes import make_agent_node, make_finalize_node
+from .state import GraphState
 
-SCORE_THRESHOLD = 75
-MAX_REVISIONS = 2
+# (agent name shown in the audit trail, method on SEOAutomationEngine)
+PIPELINE = [
+    ("KeywordIntentAgent", "_intent"),
+    ("SERPResearchAgent", "_serp"),
+    ("CompetitorOutlineAgent", "_outline"),
+    ("ContentWriterAgent", "_write"),
+    ("ImagePromptAgent", "_image_prompt"),
+    ("ImageGenerationAgent", "_image_generate"),
+    ("TechnicalSchemaAgent", "_schema"),
+    ("InternalLinkingPublisherAgent", "_links"),
+    ("SEOScoreAgent", "_score"),
+]
 
 
-def route_after_score(state: PipelineState) -> str:
-    """Revise while the score is low, but never more than MAX_REVISIONS times."""
-    needs_work = state.get("seo_score", 0) < SCORE_THRESHOLD
-    can_retry = state.get("revision_count", 0) < MAX_REVISIONS
-    return "revise_article" if needs_work and can_retry else "internal_links"
+def _route(next_node: str):
+    """After a node: stop early if a critical agent failed, else continue."""
+    def route(graph_state: GraphState) -> str:
+        return "finalize" if graph_state["halted"] else next_node
+    return route
 
 
-def build_graph():
-    g = StateGraph(PipelineState)
+def build_graph(engine):
+    g = StateGraph(GraphState)
+    names = [name for name, _ in PIPELINE]
 
-    g.add_node("keyword_intent", nodes.keyword_intent)
-    g.add_node("serp_research", nodes.serp_research)
-    g.add_node("outline", nodes.outline)
-    g.add_node("write_article", nodes.write_article)
-    g.add_node("seo_score", nodes.seo_score)
-    g.add_node("revise_article", nodes.revise_article)
-    g.add_node("internal_links", nodes.internal_links)
-    g.add_node("meta_and_schema", nodes.meta_and_schema)
+    for name, method in PIPELINE:
+        g.add_node(name, make_agent_node(name, method, engine))
+    g.add_node("finalize", make_finalize_node(engine))
 
-    g.add_edge(START, "keyword_intent")
-    g.add_edge("keyword_intent", "serp_research")
-    g.add_edge("serp_research", "outline")
-    g.add_edge("outline", "write_article")
-    g.add_edge("write_article", "seo_score")
-    g.add_conditional_edges("seo_score", route_after_score, ["revise_article", "internal_links"])
-    g.add_edge("revise_article", "seo_score")  # the loop
-    g.add_edge("internal_links", "meta_and_schema")
-    g.add_edge("meta_and_schema", END)
-
+    g.add_edge(START, names[0])
+    for i, name in enumerate(names):
+        if i + 1 < len(names):
+            g.add_conditional_edges(name, _route(names[i + 1]), [names[i + 1], "finalize"])
+        else:
+            g.add_edge(name, "finalize")
+    g.add_edge("finalize", END)
     return g.compile()
