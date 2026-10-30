@@ -1,0 +1,8 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+# B008: FastAPI's Depends() in arguments is the intended pattern.
+# BLE001: background jobs and retries must catch every failure on purpose.
+extend-ignore = ["B008", "BLE001"]
