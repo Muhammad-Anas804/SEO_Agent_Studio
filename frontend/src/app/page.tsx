@@ -30,9 +30,7 @@ import AISettings from "@/components/AISettings";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import AppShell from "@/components/AppShell";
 import Overview from "@/components/Overview";
-import WebsiteAudit from "@/components/WebsiteAudit";
-import KeywordResearch from "@/components/KeywordResearch";
-import BacklinkAnalysis from "@/components/BacklinkAnalysis";
+import { ToolView, type View } from "@/components/tools/registry";
 
 type Tab = "article" | "score" | "competitors" | "meta" | "schema" | "links" | "logs";
 
@@ -70,7 +68,7 @@ export default function Home() {
   const [showPlans, setShowPlans] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [showKB, setShowKB] = useState(false);
-  const [view, setView] = useState<"overview" | "studio" | "audits" | "keywords" | "backlinks">("overview");
+  const [view, setView] = useState<View>("overview");
 
   const runId = run?.run_id;
   const active = run ? ACTIVE.includes(run.status) : false;
@@ -219,9 +217,8 @@ export default function Home() {
           <Overview runs={historyLoaded ? history : null} usage={usage} onNewArticle={() => setView("studio")} onOpenRun={(id) => { setView("studio"); openRun(id); }} />
         )}
 
-        {view === "audits" && <WebsiteAudit />}
-        {view === "keywords" && <KeywordResearch />}
-        {view === "backlinks" && <BacklinkAnalysis />}
+
+        <ToolView view={view} />
 
         <div className={view === "studio" ? "space-y-6" : "hidden"}>
         {showHistory && (

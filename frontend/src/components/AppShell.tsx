@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { BookOpen, Bot, FileText, Globe, History, LayoutDashboard, Link2, Menu, Search, Settings, X } from "lucide-react";
+import { BookOpen, Bot, FileText, History, LayoutDashboard, Menu, Settings, X } from "lucide-react";
 import type { UsageInfo } from "@/types/seo";
+import { TOOLS, viewTitle, type View } from "@/components/tools/registry";
 
-type View = "overview" | "studio" | "audits" | "keywords" | "backlinks";
 
 interface Props {
   children: React.ReactNode;
@@ -19,19 +19,7 @@ interface Props {
   onOpenPlans: () => void;
 }
 
-const TOOLS = [
-  { id: "audits" as View, label: "Website Audits", icon: Globe },
-  { id: "keywords" as View, label: "Keyword Research", icon: Search },
-  { id: "backlinks" as View, label: "Backlink Analysis", icon: Link2 },
-];
 
-const TITLES: Record<View, string> = {
-  overview: "SEO Overview",
-  studio: "Article Studio",
-  audits: "Website Audits",
-  keywords: "Keyword Research",
-  backlinks: "Backlink Analysis",
-};
 
 const VIEWS = [
   { id: "overview" as View, label: "Overview", icon: LayoutDashboard },
@@ -90,7 +78,7 @@ export default function AppShell({ children, view, onNavigate, tier, usage, hist
 
       <header className="sticky top-0 z-20 h-16 flex items-center gap-3 px-4 md:px-8 bg-slate-900 border-b border-slate-800">
         <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="lg:hidden text-slate-300"><Menu className="w-5 h-5" /></button>
-        <h1 className="text-lg font-semibold">{TITLES[view]}</h1>
+        <h1 className="text-lg font-semibold">{viewTitle(view)}</h1>
         <div className="ml-auto flex items-center gap-2">
           {usage && (
             <span className={`px-3 py-1.5 rounded-full text-xs font-mono border ${limitReached ? "border-red-900 text-red-300" : "border-slate-800 text-slate-400"}`} title={`Resets at ${new Date(usage.resets_at).toLocaleTimeString()}`}>

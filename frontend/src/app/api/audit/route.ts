@@ -1,50 +1,51 @@
-import { attr, rateLimited, safeGetHtml, tags } from "@/lib/netsafe";
+import { makeCheck, readJsonBody, requireString, scoreChecks, withGuards } from "@/lib/tools/api";
+import { getHtml } from "@/lib/tools/fetcher";
+import { findTags, getAttr, getMeta, getTitle } from "@/lib/tools/html";
+import type { AuditResult, Check } from "@/types/tools";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function meta(html: string, key: "name" | "property", value: string): string | null {
-  for (const t of tags(html, "meta")) {
-    if ((attr(t, key) ?? "").toLowerCase() === value) return attr(t, "content") ?? "";
-  }
-  return null;
+const TITLE_LENGTH = { min: 30, max: 60 };
+const DESCRIPTION_LENGTH = { min: 70, max: 160 };
+
+const inRange = (n: number, r: { min: number; max: number }) => n >= r.min && n <= r.max;
+const foundOrMissing = (found: boolean) => (found ? "Found" : "Missing");
+
+/** On-page checks for a single HTML document. */
+function runChecks(html: string, finalUrl: string): Check[] {
+  const title = getTitle(html);
+  const description = (getMeta(html, "name", "description") ?? "").trim();
+  const h1Count = (html.match(/<h1\b/gi) ?? []).length;
+  const images = findTags(html, "img");
+  const imagesWithoutAlt = images.filter((tag) => getAttr(tag, "alt") === null).length;
+  const hasCanonical = findTags(html, "link").some((t) => (getAttr(t, "rel") ?? "").toLowerCase() === "canonical");
+  const hasViewport = getMeta(html, "name", "viewport") !== null;
+  const hasLang = /<html[^>]*\blang\s*=/i.test(html);
+  const hasOgTitle = getMeta(html, "property", "og:title") !== null;
+  const isNoindex = (getMeta(html, "name", "robots") ?? "").toLowerCase().includes("noindex");
+  const isHttps = finalUrl.startsWith("https://");
+
+  return [
+    makeCheck("Uses HTTPS", isHttps, isHttps ? "Secure connection" : "Page is served over plain HTTP"),
+    makeCheck("Title tag is 30-60 characters", inRange(title.length, TITLE_LENGTH),
+      title ? `${title.length} characters: "${title}"` : "No title found"),
+    makeCheck("Meta description is 70-160 characters", inRange(description.length, DESCRIPTION_LENGTH),
+      description ? `${description.length} characters` : "No meta description found"),
+    makeCheck("Exactly one H1", h1Count === 1, `${h1Count} H1 tag(s) found`),
+    makeCheck("All images have alt text", imagesWithoutAlt === 0,
+      images.length ? `${imagesWithoutAlt} of ${images.length} images missing alt` : "No images found"),
+    makeCheck("Canonical tag present", hasCanonical, foundOrMissing(hasCanonical)),
+    makeCheck("Viewport meta tag (mobile friendly)", hasViewport, foundOrMissing(hasViewport)),
+    makeCheck("Language set on <html>", hasLang, foundOrMissing(hasLang)),
+    makeCheck("Open Graph title present", hasOgTitle, hasOgTitle ? "Found" : "Missing (affects social sharing previews)"),
+    makeCheck("Not blocked from indexing", !isNoindex, isNoindex ? "Robots meta contains noindex" : "No noindex found"),
+  ];
 }
 
-export async function POST(req: Request) {
-  if (rateLimited(req)) return Response.json({ detail: "Too many requests, try again in a minute" }, { status: 429 });
-  let body: { url?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ detail: "Invalid request" }, { status: 400 });
-  }
-  if (typeof body.url !== "string") return Response.json({ detail: "Enter a URL" }, { status: 400 });
-
-  try {
-    const { html, finalUrl, status, ms } = await safeGetHtml(body.url);
-    const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s+/g, " ").trim();
-    const desc = (meta(html, "name", "description") ?? "").trim();
-    const h1 = (html.match(/<h1\b/gi) ?? []).length;
-    const imgs = tags(html, "img");
-    const noAlt = imgs.filter((t) => attr(t, "alt") === null).length;
-    const canonical = tags(html, "link").some((t) => (attr(t, "rel") ?? "").toLowerCase() === "canonical");
-    const robots = (meta(html, "name", "robots") ?? "").toLowerCase();
-
-    const checks = [
-      { name: "Uses HTTPS", pass: finalUrl.startsWith("https://"), detail: finalUrl.startsWith("https://") ? "Secure connection" : "Page is served over plain HTTP" },
-      { name: "Title tag is 30-60 characters", pass: title.length >= 30 && title.length <= 60, detail: title ? `${title.length} characters: "${title}"` : "No title found" },
-      { name: "Meta description is 70-160 characters", pass: desc.length >= 70 && desc.length <= 160, detail: desc ? `${desc.length} characters` : "No meta description found" },
-      { name: "Exactly one H1", pass: h1 === 1, detail: `${h1} H1 tag(s) found` },
-      { name: "All images have alt text", pass: noAlt === 0, detail: imgs.length ? `${noAlt} of ${imgs.length} images missing alt` : "No images found" },
-      { name: "Canonical tag present", pass: canonical, detail: canonical ? "Found" : "Missing" },
-      { name: "Viewport meta tag (mobile friendly)", pass: meta(html, "name", "viewport") !== null, detail: meta(html, "name", "viewport") !== null ? "Found" : "Missing" },
-      { name: "Language set on <html>", pass: /<html[^>]*\blang\s*=/i.test(html), detail: /<html[^>]*\blang\s*=/i.test(html) ? "Found" : "Missing" },
-      { name: "Open Graph title present", pass: meta(html, "property", "og:title") !== null, detail: meta(html, "property", "og:title") !== null ? "Found" : "Missing (affects social sharing previews)" },
-      { name: "Not blocked from indexing", pass: !robots.includes("noindex"), detail: robots.includes("noindex") ? "Robots meta contains noindex" : "No noindex found" },
-    ];
-    const score = Math.round((checks.filter((c) => c.pass).length / checks.length) * 100);
-    return Response.json({ finalUrl, status, ms, score, checks });
-  } catch (e) {
-    return Response.json({ detail: e instanceof Error ? e.message : "Could not audit that URL" }, { status: 400 });
-  }
-}
+export const POST = withGuards({ name: "audit" }, async (req): Promise<AuditResult> => {
+  const body = await readJsonBody(req);
+  const page = await getHtml(requireString(body, "url", "Enter a URL"));
+  const checks = runChecks(page.body, page.finalUrl);
+  return { finalUrl: page.finalUrl, status: page.status, ms: page.ms, score: scoreChecks(checks), checks };
+});
