@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { BookOpen, Bot, FileText, Globe, History, LayoutDashboard, Link2, Menu, Search, Settings, X } from "lucide-react";
 import type { UsageInfo } from "@/types/seo";
 
-type View = "overview" | "studio";
+type View = "overview" | "studio" | "audits" | "keywords" | "backlinks";
 
 interface Props {
   children: React.ReactNode;
@@ -19,12 +19,19 @@ interface Props {
   onOpenPlans: () => void;
 }
 
-// Only features that exist are clickable. The rest are shown honestly as not available yet.
-const SOON = [
-  { label: "Website Audits", icon: Globe },
-  { label: "Keyword Research", icon: Search },
-  { label: "Backlink Analysis", icon: Link2 },
+const TOOLS = [
+  { id: "audits" as View, label: "Website Audits", icon: Globe },
+  { id: "keywords" as View, label: "Keyword Research", icon: Search },
+  { id: "backlinks" as View, label: "Backlink Analysis", icon: Link2 },
 ];
+
+const TITLES: Record<View, string> = {
+  overview: "SEO Overview",
+  studio: "Article Studio",
+  audits: "Website Audits",
+  keywords: "Keyword Research",
+  backlinks: "Backlink Analysis",
+};
 
 const VIEWS = [
   { id: "overview" as View, label: "Overview", icon: LayoutDashboard },
@@ -72,19 +79,18 @@ export default function AppShell({ children, view, onNavigate, tier, usage, hist
             <Settings className="w-4 h-4" aria-hidden="true" /> AI Settings
           </button>
 
-          <p className="px-3 pt-5 pb-1 text-xs font-mono text-slate-400">COMING SOON</p>
-          {SOON.map(({ label, icon: Icon }) => (
-            <div key={label} aria-disabled="true" className={`${item} text-slate-500 cursor-not-allowed`}>
+          <p className="px-3 pt-5 pb-1 text-xs font-mono text-slate-400">SEO TOOLS</p>
+          {TOOLS.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" onClick={run(() => onNavigate(id))} aria-current={view === id ? "page" : undefined} className={`${item} ${view === id ? "bg-cyan-950 text-cyan-400 font-semibold" : "text-slate-300 hover:bg-slate-950"}`}>
               <Icon className="w-4 h-4" aria-hidden="true" /> {label}
-              <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800">Soon</span>
-            </div>
+            </button>
           ))}
         </nav>
       </aside>
 
       <header className="sticky top-0 z-20 h-16 flex items-center gap-3 px-4 md:px-8 bg-slate-900 border-b border-slate-800">
         <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="lg:hidden text-slate-300"><Menu className="w-5 h-5" /></button>
-        <h1 className="text-lg font-semibold">{view === "overview" ? "SEO Overview" : "Article Studio"}</h1>
+        <h1 className="text-lg font-semibold">{TITLES[view]}</h1>
         <div className="ml-auto flex items-center gap-2">
           {usage && (
             <span className={`px-3 py-1.5 rounded-full text-xs font-mono border ${limitReached ? "border-red-900 text-red-300" : "border-slate-800 text-slate-400"}`} title={`Resets at ${new Date(usage.resets_at).toLocaleTimeString()}`}>
