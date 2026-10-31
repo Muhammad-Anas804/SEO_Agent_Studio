@@ -7,9 +7,9 @@ suggestions chosen from your real site pages.
 
 ## Features
 
-- **Multiple AI providers with automatic fallback:** Gemini, Groq, OpenAI and Anthropic. Choose a primary model and up to 4 fallbacks in the app (AI button), test each connection, and the pipeline switches models when one is overloaded, rate-limited, out of credit or rejects the key. Each run records which model answered and tells you when a fallback was used.
-- **Writing controls:** choose tone, target length (800-2,500 words) and language per article.
-- **Real competitor research (Pro):** top Google results, People Also Ask and related searches (via Serper), used to build the outline and FAQ. Cached for 24 hours to save credits. Needs `SERPER_API_KEY`; without it the step is skipped.
+- **Multiple AI providers with automatic fallback:** Gemini, Groq, OpenAI, and Anthropic. Choose a primary model and up to 4 fallbacks in the app (AI button), test each connection, and the pipeline switches models when one is overloaded, rate-limited, out of credit, or rejects the key. Each run records which model answered and tells you when a fallback was used.
+- **Writing controls:** choose tone, target length (800-2,500 words), and language per article.
+- **Real competitor research (Pro):** top Google results, People Also Ask, and related searches (via Serper), used to build the outline and FA and cached for 24 hours to save credits. Needs `SERPER_API_KEY`; without it, the step is skipped.
 - **SEO score (0-100):** automatic on-page checks (title and description length, keyword placement and density, headings, length, readability, schema, internal links) with a pass/fail list.
 - **Exports:** download Markdown (with front matter), CMS-ready HTML (sanitized, with meta tags and JSON-LD) or the full JSON.
 - **Run history:** reopen or delete any past run.
@@ -19,15 +19,15 @@ suggestions chosen from your real site pages.
 
 ## AI providers and fallback
 
-Set the keys you have in `.env` (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). Then either use the **AI** button in the app, or set `AI_PRIMARY` and `AI_FALLBACKS` (format `provider:model`).
+Set the keys you have in `.env` (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). Then either use the **AI** button in the app, or set `AI_PRIMARY` and `AI_FALLBACKS` (format `provider: model`).
 
 - Models run in order. Retryable errors (rate limits, 5xx, timeouts, network, invalid output) are retried a bounded number of times with backoff, honouring `Retry-After`. If a fallback exists and the wait would be long, it switches immediately.
 - Non-retryable errors (bad key, unknown model, bad request, exhausted quota) skip straight to the next model.
 - The same model is never tried twice, and there is an overall deadline (`AI_DEADLINE_SECONDS`).
-- If every model fails the run fails with a clear message. No content is invented.
+- If every model fails, the run fails with a clear message. No content is invented.
 - Changing settings needs a key listed in `ADMIN_API_KEYS`. API keys never leave the server.
-- The model lists in the app are suggestions (override with `AI_MODEL_CATALOG`). Whether you can use a model depends on your account, so use **Test connection**.
-- Verified against real services: only Gemini (during development). The Groq, OpenAI and Anthropic adapters are tested against mocked HTTP only: test each with your own key before relying on it.
+- The models listed in the app are suggestions (override with `AI_MODEL_CATALOG`). Whether you can use a model depends on your account, so use **Test connection**.
+- Verified against real services: only Gemini (during development). The Groq, OpenAI, and Anthropic adapters are tested against mocked HTTP only: test each with your own key before relying on it.
 
 ## How it works
 
@@ -48,8 +48,8 @@ Browser -> Next.js (server routes hold the API key) -> FastAPI -> Gemini
 # backend (repo root)
 python -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env                               # add GEMINI_API_KEY
-uvicorn seo_agents.api:app --reload                # http://127.0.0.1:8000/docs
+cp .env.anas .env                               # add GEMINI_API_KEY
+uvicorn seo_agents.api: app --reload                # http://127.0.0.1:8000/docs
 pytest                                             # 57 tests, no network or API key needed
 
 # frontend
@@ -61,7 +61,7 @@ With `API_KEYS` empty, the backend runs without auth for local development only.
 ## Deploy
 
 **Backend (Railway, Render, Fly or any Docker host)**
-1. Deploy the `Dockerfile` (or start with `uvicorn seo_agents.api:app --host 0.0.0.0 --port $PORT --workers 1`).
+1. Deploy the `Dockerfile` (or start with `uvicorn seo_agents.api: app --host 0.0.0.0 --port $PORT --workers 1`).
 2. Set env vars: `ENVIRONMENT=production`, `GEMINI_API_KEY`, `API_KEYS` (long random keys, e.g. `abc...:pro`), `ALLOWED_ORIGINS=https://your-frontend-domain`.
 3. **Attach a persistent volume** and set `DATABASE_PATH=/data/seo_agent.db`. Without it, run history is lost on every redeploy.
 4. Production refuses to start if the Gemini key or API keys are missing, or if CORS is `*`.
@@ -87,12 +87,12 @@ With `API_KEYS` empty, the backend runs without auth for local development only.
 - Added retries with backoff, per-step audit logs, and stop-on-failure so later agents never work on missing data.
 - JSON-LD is built in code (always valid) instead of asking the model to write JSON strings.
 - Internal links are restricted to paths you supply; model-invented pages are discarded.
-- Added persistence, tests (22), CI, Dockerfile and docs. The old `/api/run-seo` endpoint was replaced by the versioned API above.
+- Added persistence, tests (22), CI, Dockerfile, and docs. The old `/api/run-seo` endpoint was replaced by the versioned API above.
 
 ## Known limits (read before selling)
 
-- **Competitor research uses titles and snippets only.** With `SERPER_API_KEY` the outline is built from real Google results, but full competitor pages are not fetched or analysed. Without the key the outline is the model's own analysis.
-- **Fact accuracy.** Prompts forbid invented statistics, but every article needs human review before publishing.
-- **Single instance.** SQLite, the in-memory rate limiter and in-process jobs suit one server. For multiple instances move to Postgres, Redis and a job queue.
-- **No user accounts or billing.** Access is by API key and a shared password. For paying customers add auth (Clerk/Auth.js), per-user keys and Stripe.
+- **Competitor research uses titles and snippets only.** With `SERPER_API_KEY ', the outline is built from real Google results, but full competitor pages are not fetched or analysed **. ** Without the key, the outline is the model's own analysis. ** **
+- **Fact accuracy. ** **** Prompts forbid invented statistics, but every article needs human review before publishing.
+- **Single instance.** SQLite, the in-memory rate limiter and in-process jobs suit one server. For multiple instances, move to Postgres, Redis,s and a job queue.
+- **No user accounts or billing.** Access is by API key and a shared password. For paying customers, add auth (Clerk/Auth.js), per-user keys,s and Stripe.
 - **No CMS publishing.** `ready_for_cms_publish` is a flag; connectors (WordPress, Webflow, custom API) are not built yet.
