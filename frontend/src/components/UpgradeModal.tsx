@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { Check, Minus, X } from "lucide-react";
 
-const UPGRADE_URL = process.env.NEXT_PUBLIC_UPGRADE_URL || "https://www.linkedin.com/in/buildsaiagents";
+const UPGRADE_URL = process.env.NEXT_PUBLIC_UPGRADE_URL || "https://wa.me/923079062502";
 
 const ROWS: { label: string; free: boolean; pro: boolean }[] = [
   { label: "Full SEO article + meta title and description", free: true, pro: true },
